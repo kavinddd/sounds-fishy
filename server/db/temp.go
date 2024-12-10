@@ -1,13 +1,25 @@
 package db
 
-import "math/rand"
+import (
+	"sound-fishy/helper"
+)
 
-var temp = [4]string{
-	"_ loves carrot",
-	"_ is banned to be in car",
+type FunFact struct {
+	Full   string
+	Hidden string
 }
 
-func RandomFact() string {
-	randInd := rand.Intn(len(temp))
-	return temp[randInd]
+var temp = []*FunFact{
+	{
+		Full:   "Rabbit loves eating carrot.",
+		Hidden: "_ loves eating carrot.",
+	},
+	{
+		Full:   "Test test test test",
+		Hidden: "Test test test _",
+	},
+}
+
+func RandomFact() *FunFact {
+	return helper.RandomSelect(temp)
 }

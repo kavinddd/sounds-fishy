@@ -10,6 +10,9 @@ import (
 type Client struct {
 	conn *websocket.Conn
 	room *Room
+
+	Name string
+	Role Role
 }
 
 // send message to client if any messages are broadcasted
@@ -29,4 +32,13 @@ func sendMessages(c *Client) {
 		}
 	}
 
+}
+
+func NewClient(conn *websocket.Conn, name string) *Client {
+	return &Client{
+		conn: conn,
+		room: &Room{},
+		Name: name,
+		Role: PLAYER,
+	}
 }

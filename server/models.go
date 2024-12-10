@@ -3,25 +3,23 @@ package main
 // ======================================================================= //
 
 type Message struct {
+	ToHost      bool         `json:"toHost"`
+	RoomInfo    *RoomInfo    `json:"roomInfo,omitempty"`
 	Type        MessageType  `json:"type"`
-	RoomStatus  RoomStatus   `json:"roomStatus"`
 	ChatContent string       `json:"chatContent,omitempty"`
 	GameContent *GameContent `json:"gameContent,omitempty"`
-}
-
-func NewChatMsg(chatMsg string) *Message {
-	return &Message{
-		Type:        CHAT,
-		RoomStatus:  LOBBY,
-		ChatContent: chatMsg,
-		GameContent: nil,
-	}
 }
 
 type GameContent struct {
 	State   GameState `json:"state"`
 	Role    Role      `json:"role"`
 	Content string    `json:"content"`
+}
+
+type RoomInfo struct {
+	Capacity   int        `json:"capacity"`
+	PlayerNum  int        `json:"playerNum"`
+	RoomStatus RoomStatus `json:"roomStatus"`
 }
 
 // ======================================================================= //
@@ -37,16 +35,10 @@ type RoomStatus string
 
 const (
 	IN_GAME    RoomStatus = "IN_GAME"
+	TO_START   RoomStatus = "TO_START"
 	WAIT_READY RoomStatus = "WAIT_READY"
 	LOBBY      RoomStatus = "LOBBY"
-)
-
-type Role string
-
-const (
-	PLAYER    Role = "PLYAER"
-	RED_FISH  Role = "RED_FISH"
-	BLUE_FISH Role = "BLUE_FISH"
+	TERMINATE  RoomStatus = "TERMINATE"
 )
 
 type GameState string

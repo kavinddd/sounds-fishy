@@ -20,8 +20,12 @@ func routes(router *chi.Mux) {
 
 func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 
-	// TODO: validate the room code
 	roomCode := chi.URLParam(r, "roomCode")
+
+	if !isRoomCodeValid(roomCode) {
+		http.Error(w, "Invalid room code", http.StatusBadRequest)
+		return
+	}
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin:     func(r *http.Request) bool { return true },
@@ -42,11 +46,12 @@ func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 	client.room = room
 
 	room.register <- client
+
 	go sendMessages(client)
 
 	// send message to the current client if there is a broadcast
 	// required goroutine to run parallel with under for inf loop
-	// so we have two inf. loop
+	// so we have two inf. loopseparate locks to allow greater concurrency.
 	// 1. read messgae (this gorutine)
 	// 2. send message (another goroutine)
 
@@ -61,7 +66,18 @@ func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		room.broadcast <- &msg
+		if msg.Type == CHAT {
+			room.broadcast <- &msg
+			return
+		}
+
+		if msg.Type == GAME {
+			room.gameController <- &MessageAndSender{
+				Message: &msg,
+				Client:  client,
+			}
+		}
+
 	}
 
 	room.unregister <- client
