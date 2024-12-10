@@ -3,6 +3,7 @@ import Chatbox from "./Chatbox";
 import useSocket from "../../hooks/useSocket";
 import { Message } from "./types";
 import { useToast } from "@/hooks/use-toast";
+import { SendHorizonal } from "lucide-react";
 
 const SERVER_URL = "http://localhost:8080";
 const SOCKET_PATH = "start";
@@ -21,6 +22,7 @@ function AppPage() {
       console.log(msg);
       if (msg.type === "CHAT") {
         setChats((prevChats) => [...prevChats, msg.chatContent]);
+        return;
       }
     },
     onOpen: () =>
@@ -28,7 +30,13 @@ function AppPage() {
         title: "Joined room",
         duration: 1200,
       }),
-    onClose: () => setChats([]),
+    onClose: () => {
+      toast({
+        title: "Disconnect the room",
+        duration: 1200,
+      });
+      setChats([]);
+    },
     onError: () => setChats([]),
   });
 
@@ -59,19 +67,23 @@ function AppPage() {
         type="text"
         id="roomCode"
         name="roomCode"
+        disabled={isConnected}
         onChange={handleRoomCodeChanged}
       />
 
-      <button disabled={isConnected} onClick={connect}>
-        Connect
-      </button>
-      <button disabled={!isConnected} onClick={disconnect}>
-        Disconnect
-      </button>
+      {isConnected ? (
+        <button disabled={!isConnected} onClick={disconnect}>
+          Disconnect
+        </button>
+      ) : (
+        <button disabled={isConnected} onClick={connect}>
+          Connect
+        </button>
+      )}
 
       {isConnected && (
         <>
-          <div className="">
+          <div>
             <label htmlFor="message">Message</label>
             <input
               type="text"
@@ -83,11 +95,16 @@ function AppPage() {
               disabled={!isConnected || message == ""}
               onClick={handleSendMsg}
             >
-              Send message
+              <SendHorizonal
+                size={14}
+                className="text-sky-600 hover:opacity-80"
+              />
             </button>
           </div>
 
-          <Chatbox messages={chats} />
+          <div className="">
+            <Chatbox messages={chats} />
+          </div>
         </>
       )}
     </>
