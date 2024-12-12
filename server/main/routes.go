@@ -32,19 +32,20 @@ func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
-	defer conn.Close()
+	defer func() {
+		log.Println("Connection is about to close since main go routine is ending")
+		conn.Close()
+	}()
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	client := &Client{conn: conn}
-
 	room := getOrCreateRoom(roomCode)
-
 	client.room = room
-
 	room.register <- client
 
 	go sendMessages(client)
@@ -68,7 +69,6 @@ func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 
 		if msg.Type == CHAT {
 			room.broadcast <- &msg
-			return
 		}
 
 		if msg.Type == GAME {

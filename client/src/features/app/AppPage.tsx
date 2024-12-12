@@ -4,6 +4,8 @@ import useSocket from "../../hooks/useSocket";
 import { Message } from "./types";
 import { useToast } from "@/hooks/use-toast";
 import { SendHorizonal } from "lucide-react";
+import ConnectForm from "./ConnectForm";
+import { GameRoomProvider, useGameRoom } from "./useGameRoom";
 
 const SERVER_URL = "http://localhost:8080";
 const SOCKET_PATH = "start";
@@ -11,15 +13,22 @@ const SOCKET_PATH = "start";
 function AppPage() {
   const [message, setMessage] = useState("");
   // const [socket, setSocket] = useState<Socket | null>(null);
-  const [roomCode, setRoomCode] = useState("");
   const [chats, setChats] = useState<string[]>([]);
 
   const { toast } = useToast();
+  const { roomCode, name} = useGameRoom()
 
   const { isConnected, sendMessage, connect, disconnect } = useSocket<Message>({
-    path: `${SERVER_URL}/${SOCKET_PATH}/${roomCode}`,
     onMessage: (msg) => {
       console.log(msg);
+      if (msg.roomStatus === "TERMINATE") {
+        toast({
+          title: "Party is disbanded",
+          duration: 1200,
+        });
+        return;
+      }
+
       if (msg.type === "CHAT") {
         setChats((prevChats) => [...prevChats, msg.chatContent]);
         return;
@@ -31,21 +40,26 @@ function AppPage() {
         duration: 1200,
       }),
     onClose: () => {
+      console.log("Connection closed");
       toast({
         title: "Disconnect the room",
         duration: 1200,
       });
       setChats([]);
     },
-    onError: () => setChats([]),
+    onError: () => {
+      console.log("Error websocket");
+      toast({
+        variant: "destructive",
+        title: "Error",
+        duration: 1200,
+      });
+      setChats([]);
+    },
   });
 
   function handleMessageChanged(e: React.ChangeEvent<HTMLInputElement>) {
     setMessage(e.target.value);
-  }
-
-  function handleRoomCodeChanged(e: React.ChangeEvent<HTMLInputElement>) {
-    setRoomCode(e.target.value);
   }
 
   function handleSendMsg() {
@@ -58,28 +72,14 @@ function AppPage() {
 
     sendMessage(msg);
     setMessage("");
+  
   }
 
-  return (
-    <>
-      <label htmlFor="roomCode">Room Code</label>
-      <input
-        type="text"
-        id="roomCode"
-        name="roomCode"
-        disabled={isConnected}
-        onChange={handleRoomCodeChanged}
-      />
 
-      {isConnected ? (
-        <button disabled={!isConnected} onClick={disconnect}>
-          Disconnect
-        </button>
-      ) : (
-        <button disabled={isConnected} onClick={connect}>
-          Connect
-        </button>
-      )}
+
+  return <GameRoomProvider>
+    
+      {!isConnected && <ConnectForm />}
 
       {isConnected && (
         <>
@@ -107,7 +107,7 @@ function AppPage() {
           </div>
         </>
       )}
-    </>
+</GameRoomProvider>
   );
 }
 

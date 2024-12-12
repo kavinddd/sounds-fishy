@@ -1,7 +1,7 @@
 package db
 
 import (
-	"sound-fishy/helper"
+	"sounds-fishy/helper"
 )
 
 type FunFact struct {

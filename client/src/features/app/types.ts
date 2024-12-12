@@ -15,6 +15,6 @@ export type GameContent = {
 };
 
 export type MessageType = "CHAT" | "GAME";
-export type RoomStatus = "In-Game" | "Wait-Ready";
+export type RoomStatus = "IN-GAME" | "WAIT-READY" | "TERMINATE";
 export type GameState = "";
-export type Role = "Player" | "Red-Fish" | "Blue-Fish";
+export type Role = "PLAYER" | "RED-FISH" | "BLUE-FISH";

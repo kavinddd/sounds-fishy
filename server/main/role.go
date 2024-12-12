@@ -10,7 +10,10 @@ const (
 	BLUE_FISH Role = "BLUE_FISH"
 )
 
-/* return a shuffled array of Role that has 1 player, 1 blue fish, n - 2 red fish*/
+/*
+return a shuffled array of Role that has 1 player, 1 blue fish, n - 2 red fish
+  - n should not be less than 4
+*/
 func RandomRoles(n int) ([]Role, error) {
 	if n < 4 {
 		return nil, fmt.Errorf("Roles cannot be less than")

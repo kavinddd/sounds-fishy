@@ -9,24 +9,34 @@ type Params<T> = {
 };
 
 export default function useSocket<T>(params: Params<T>) {
-  const { path, onMessage, onOpen, onClose, onError } = params;
+  const { onMessage, onOpen, onClose, onError } = params;
   const [conn, setConn] = useState<WebSocket | null>(null);
 
-  function connect() {
+  function connect(path: string) {
     const conn = new WebSocket(path);
+
     conn.onmessage = (ev: MessageEvent) => {
       const msg = JSON.parse(ev.data) as T;
       onMessage(msg);
     };
 
     conn.onopen = () => onOpen?.();
-    conn.onclose = () => onClose?.();
-    conn.onerror = () => onError?.();
+
+    conn.onclose = () => {
+      setConn(null);
+      onClose?.();
+    };
+
+    conn.onerror = () => {
+      onError?.();
+      console.error("websocket error");
+    };
 
     setConn(conn);
   }
 
   function disconnect() {
+    console.log("disconect ", conn);
     if (!conn) return;
     conn.close();
     setConn(null);
@@ -45,6 +55,8 @@ export default function useSocket<T>(params: Params<T>) {
       }
     };
   }, [conn]);
+
+  console.log("Connection: ", conn);
 
   return {
     isConnected: conn != null,

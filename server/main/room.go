@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sounds-fishy/db"
 	"sync"
 	"time"
 )
@@ -19,6 +20,7 @@ type Room struct {
 	status         RoomStatus
 	roomCode       string
 	host           *Client
+	funFact        *db.FunFact
 	clientsReady   map[*Client]bool
 	clients        map[*Client]bool
 	register       chan *Client
@@ -40,13 +42,19 @@ func (r *Room) IsHost(c *Client) bool {
 }
 
 func (r *Room) Terminate() {
+	log.Printf("Room is terminating %s", r.roomCode)
 	r.status = TERMINATE
 	r.broadcast <- r.NewChatMsg(nil, "Host is left the room, until next time!")
-	msg := r.NewGameMsg()
+	//msg := r.NewGameMsg()
+
 	for client := range r.clients {
-		defer client.conn.Close()
-		client.conn.WriteJSON(msg)
+		log.Printf("Client connection is closing dues to host room termination")
+		// client.conn.WriteJSON(msg)
+		client.conn.Close()
 	}
+
+	delete(rooms, r.roomCode)
+	log.Printf("Now there are %d active rooms", len(rooms))
 }
 
 /* create a ChatMessage with injected room infos */
@@ -75,14 +83,32 @@ func (r *Room) NewGameMsg() *Message {
 }
 
 func (r *Room) ready(c *Client) {
-	b, exist := r.clientsReady[c]
+	isReady, exist := r.clientsReady[c]
 
-	if exist && b {
+	if exist && isReady {
 		log.Printf("%s is already ready", c.Name)
 		return
 	}
 
 	r.clientsReady[c] = true
+
+}
+
+func (r *Room) randomDistributeRoles() error {
+
+	roles, err := RandomRoles(len(r.clients))
+
+	if err != nil {
+		return err
+	}
+
+	idx := 0
+	for client := range r.clients {
+		client.Role = roles[idx]
+		idx++
+	}
+
+	return nil
 
 }
 
@@ -93,20 +119,18 @@ func (r *Room) run() {
 		case client := <-r.register:
 			// if its the first guy, make him host
 			r.clients[client] = true
+
+			r.broadcast <- r.NewChatMsg(client, "Welcome to the room")
+
 			if len(r.clients) == 1 {
 				r.host = client
 				r.broadcast <- r.NewChatMsg(client, "You are the host!")
 				r.broadcast <- r.NewChatMsg(client, fmt.Sprintf("Let's invite your friend with the room code: %s", r.roomCode))
 			}
 
-			r.broadcast <- r.NewChatMsg(client, "Welcome to the room")
-
-			fmt.Println(r.clients)
-
 		case client := <-r.unregister:
 			delete(r.clients, client)
 			r.broadcast <- r.NewChatMsg(client, "Someone left the room")
-
 			client.conn.Close()
 
 			if r.IsHost(client) || len(r.clients) == 0 {
@@ -133,7 +157,7 @@ func (r *Room) run() {
 			if msg.RoomInfo.RoomStatus == TO_START {
 				if !room.IsHost(client) {
 					log.Printf("Client -%s- which is not the host tried to start the game", client.Name)
-					client.conn.Close()
+					room.unregister <- client
 					return
 				}
 				room.status = WAIT_READY
@@ -141,14 +165,15 @@ func (r *Room) run() {
 				room.broadcast <- waitReadyMsg
 
 				go func() {
-					time.Sleep(3 * time.Second)
+					time.Sleep(5 * time.Second)
 					if room.status != WAIT_READY {
 						return
 					}
 					room.status = LOBBY
 					failToStartMsg := room.NewGameMsg()
 					room.broadcast <- failToStartMsg
-					log.Printf("There is some client is not yet ready, please try again")
+					failToStartChatMsg := room.NewChatMsg(nil, "Someone is not yet ready, please try again.")
+					room.broadcast <- failToStartChatMsg
 				}()
 
 			}
@@ -156,14 +181,39 @@ func (r *Room) run() {
 			if msg.RoomInfo.RoomStatus == WAIT_READY {
 				room.ready(client)
 
-				if len(room.clientsReady) == len(room.clients) {
+				isEveryoneReady := len(room.clientsReady) == len(room.clients)
+
+				log.Printf("%s - ready %d/%d", room.roomCode, len(room.clientsReady), len(room.clients))
+
+				if isEveryoneReady {
+
+					log.Printf("%s - trying to start game", room.roomCode)
+
 					room.status = IN_GAME
+					room.funFact = db.RandomFact()
+
 					gameStartMsg := room.NewGameMsg()
 					gameStartMsg.GameContent.State = ASSIGN_ROLE
 
-					for c := range r.clients {
+					for c := range room.clients {
+
+						gameStartMsg.GameContent.Role = c.Role
+						content := r.funFact.Full
+
+						if c.Role == PLAYER {
+							content = r.funFact.Hidden
+						}
+
+						gameStartMsg.GameContent.Content = content
+
 						c.conn.WriteJSON(gameStartMsg)
+
+						roleMessage := room.NewChatMsg(c, fmt.Sprintf("You are %s", c.Role))
+						c.conn.WriteJSON(roleMessage)
 					}
+
+					log.Printf("%s - start game succesfully", room.roomCode)
+
 				}
 
 				return

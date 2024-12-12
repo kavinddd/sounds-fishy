@@ -1,4 +1,4 @@
-module sound-fishy
+module sounds-fishy
 
 go 1.22.2
 
