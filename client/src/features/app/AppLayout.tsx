@@ -8,6 +8,7 @@ function AppLayout() {
         <h1 className="bg-sky-500 p-2 text-center text-3xl font-bold text-gray-200">
           Sounds Fishy
         </h1>
+
         <main className="bg-gray-100 p-2">
           <Outlet />
         </main>

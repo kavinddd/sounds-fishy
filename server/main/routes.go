@@ -34,6 +34,7 @@ func handleConnectRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
+
 	defer func() {
 		log.Println("Connection is about to close since main go routine is ending")
 		conn.Close()

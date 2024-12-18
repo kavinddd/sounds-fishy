@@ -7,7 +7,8 @@ import {
 } from "react";
 import { Role, RoomStatus } from "./types";
 
-type State = {
+// =================== reducer ==========================
+type GameRoomState = {
   name?: string;
   roomCode?: string;
 
@@ -16,15 +17,15 @@ type State = {
   currentClients?: number;
 };
 
-const intialState: State = {};
+const intialGameRoomState: GameRoomState = {};
 
-type Action =
-  | { type: "SET_NAME_ROOMCODE"; payload: State }
+type ReducerAction =
+  | { type: "SET_NAME_ROOMCODE"; payload: GameRoomState }
   | { type: "SET_ROLE"; payload: Role | undefined }
   | { type: "SET_ROOMSTATUS"; payload: RoomStatus | undefined }
   | { type: "SET_CURRENT_CLIENTS"; payload: number | undefined };
 
-function reducer(state: State, action: Action) {
+function reducer(state: GameRoomState, action: ReducerAction): GameRoomState {
   switch (action.type) {
     case "SET_NAME_ROOMCODE":
       return {
@@ -32,20 +33,81 @@ function reducer(state: State, action: Action) {
         name: action.payload.name,
         roomCode: action.payload.roomCode,
       };
+
+    default:
+      return state;
   }
 }
 
-type Value = {
-  state: State;
-  dispatch: React.Dispatch<Action>;
+// =================== action creators ===================
+
+interface SetNameAndRoomCodeParam {
+  name?: string;
+  roomCode?: string;
+}
+
+function setNameAndRoomCodeAction({
+  name,
+  roomCode,
+}: SetNameAndRoomCodeParam): ReducerAction {
+  return {
+    type: "SET_NAME_ROOMCODE",
+    payload: { name, roomCode },
+  };
+}
+
+function setRoleAction(role?: Role): ReducerAction {
+  return {
+    type: "SET_ROLE",
+    payload: role,
+  };
+}
+
+function setRoomStatusAction(roomStatus?: RoomStatus): ReducerAction {
+  return {
+    type: "SET_ROOMSTATUS",
+    payload: roomStatus,
+  };
+}
+
+function setCurrentClientsAction(numClient?: number): ReducerAction {
+  return {
+    type: "SET_CURRENT_CLIENTS",
+    payload: numClient,
+  };
+}
+
+// =================== context ==========================
+
+type UseGameroomContextType = {
+  state: GameRoomState;
+  dispatch: React.Dispatch<ReducerAction>;
 };
 
-const GameRoomContext = createContext<Value | undefined>(undefined);
+const GameRoomContext = createContext<UseGameroomContextType | undefined>(
+  undefined,
+);
 
-function GameRoomProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, intialState);
+function GameRoomProvider({ children }: { children: ReactNode | ReactNode[] }) {
+  const [state, dispatch] = useReducer(reducer, intialGameRoomState);
+  const value = useMemo(() => {
+    const setNameAndRoomCode = (param: SetNameAndRoomCodeParam) =>
+      dispatch(setNameAndRoomCodeAction(param));
+    const setRole = (role?: Role) => dispatch(setRoleAction(role));
+    const setRoomStatus = (roomStatus?: RoomStatus) =>
+      dispatch(setRoomStatusAction(roomStatus));
+    const setCurrentClients = (numClient?: number) =>
+      dispatch(setCurrentClientsAction(numClient));
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+    return {
+      state,
+      dispatch,
+      setNameAndRoomCode,
+      setRole,
+      setRoomStatus,
+      setCurrentClients,
+    };
+  }, [state]);
 
   return (
     <GameRoomContext.Provider value={value}>
