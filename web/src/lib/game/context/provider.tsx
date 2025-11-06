@@ -1,0 +1,264 @@
+import {
+  createContext,
+  useCallback,
+  useMemo,
+  useReducer,
+  useState,
+} from 'react'
+import type {
+  ClientMessage,
+  RoomStateServerMessage,
+  ServerMessage,
+} from '@/lib/game/types'
+import { serverMessageSchema } from '@/lib/game/types'
+
+// region: state
+interface GameConnectionConnectingState {
+  status: 'connecting'
+  url: string
+}
+
+interface GameConnectionOpenState {
+  status: 'open'
+  // lastMessage: ServerMessage
+  url: string
+
+  name: string
+  roomState: Omit<RoomStateServerMessage, 'type'>
+  messageHistory: Array<ServerMessage>
+}
+
+interface GameConnectionCloseState {
+  status: 'closed'
+  reason: string
+}
+
+interface GameConnectionClosingState {
+  status: 'closing'
+}
+
+type GameConnectionState =
+  | GameConnectionConnectingState
+  | GameConnectionOpenState
+  | GameConnectionCloseState
+  | GameConnectionClosingState
+
+type GameConnectionStatus = GameConnectionState['status']
+
+export const INIT_GAME_STATE: GameConnectionState = {
+  status: 'closed',
+  reason: '',
+}
+
+type GameConnectionStateAction =
+  | { type: 'disconnect'; reason: string }
+  | { type: 'connect'; url: string }
+  | { type: 'successConnect' }
+  | { type: 'errorConnect'; message?: string }
+  | { type: 'message'; serverMessage: ServerMessage }
+
+const reducer = (
+  state: GameConnectionState,
+  action: GameConnectionStateAction,
+): GameConnectionState => {
+  switch (action.type) {
+    case 'connect':
+      return { ...state, status: 'connecting', url: action.url }
+
+    case 'successConnect':
+      if (state.status !== 'connecting') {
+        console.error('Cannot connect succesfully without')
+        return state
+      }
+
+      return {
+        ...state,
+        status: 'open',
+        name: '',
+        messageHistory: [],
+        roomState: { players: [], player_count: 0 },
+      }
+
+    case 'disconnect':
+      console.error('disconnect')
+      return { ...state, status: 'closed', reason: action.reason }
+
+    case 'errorConnect':
+      return {
+        ...state,
+        status: 'closed',
+        reason: action.message || 'unknown error',
+      }
+
+    case 'message': {
+      if (state.status !== 'open') return { ...state }
+      const { serverMessage } = action
+      switch (serverMessage.type) {
+        case 'room_state':
+          return { ...state, roomState: { ...serverMessage } }
+        default:
+          return {
+            ...state,
+            messageHistory: [...state.messageHistory, serverMessage],
+          }
+      }
+    }
+  }
+}
+
+// endregion: state
+
+// region: context
+//
+
+interface Hostable {
+  host: () => void
+}
+interface Joinable {
+  join: (roomCode: string) => void
+}
+interface Closable {
+  close: () => void
+}
+interface Sendable {
+  send: (msg: ClientMessage) => void
+}
+
+type ActionsByStatus = {
+  [S in GameConnectionStatus]: S extends 'closed'
+    ? Hostable & Joinable
+    : S extends 'open'
+      ? Closable & Sendable
+      : {}
+}
+
+type GameCtxState<T extends GameConnectionStatus> = {
+  state: Extract<GameConnectionState, { status: T }>
+}
+type GameAction<T extends GameConnectionStatus> =
+  keyof ActionsByStatus[T] extends never
+    ? {}
+    : {
+        actions: ActionsByStatus[T]
+      }
+
+// extends any to force distriution
+type GameCtxType<T extends GameConnectionStatus = GameConnectionStatus> =
+  T extends any ? { status: T } & GameCtxState<T> & GameAction<T> : never
+
+export const GameCtx = createContext<GameCtxType | null>(null)
+
+interface GameCtxProps {
+  endpoints: {
+    create: string
+    join: string
+  }
+  url: string
+  children: React.ReactNode
+}
+
+const GameCtxProvider = ({ endpoints, url, children }: GameCtxProps) => {
+  const [ws, setWs] = useState<WebSocket | null>(null)
+
+  const [state, dispatch] = useReducer(reducer, INIT_GAME_STATE)
+
+  const start = useCallback(
+    (u: string) => {
+      console.log('attept to start connection')
+
+      if (state.status !== 'closed') {
+        console.log('The status must be closed to start connection')
+      }
+
+      dispatch({ type: 'connect', url: u })
+
+      const wsRef = new WebSocket(u)
+
+      wsRef.addEventListener('open', (_) => {
+        dispatch({ type: 'successConnect' })
+      })
+
+      wsRef.addEventListener('close', (e) => {
+        dispatch({
+          type: 'disconnect',
+          reason: e.reason || String(e.code) || '',
+        })
+      })
+
+      wsRef.addEventListener('error', (e) => {
+        console.log('error: ', e)
+        dispatch({ type: 'errorConnect', message: 'Error' })
+      })
+
+      wsRef.addEventListener('message', async (event) => {
+        try {
+          const unknownMsg = JSON.parse(event.data) as unknown
+          const msg = await serverMessageSchema.parseAsync(unknownMsg)
+          console.log(msg)
+        } catch (e: unknown) {
+          console.log(e)
+        }
+      })
+
+      setWs(wsRef)
+    },
+    [state.status],
+  )
+
+  const close = useCallback(() => {
+    ws?.close()
+    dispatch({ type: 'disconnect', reason: 'close' })
+  }, [ws])
+
+  const send = useCallback(
+    (msg: ClientMessage) => {
+      ws?.send(JSON.stringify(msg))
+    },
+    [ws],
+  )
+
+  const value = useMemo<GameCtxType>(() => {
+    const status = state.status
+    switch (status) {
+      case 'open':
+        return {
+          status,
+          state,
+          actions: {
+            close,
+            send,
+          },
+        }
+      case 'connecting':
+        return {
+          status,
+          state,
+        }
+      case 'closed':
+        return {
+          status,
+          state,
+          actions: {
+            host: () => start(`${url}/${endpoints.create}`),
+            join: (roomCode: string) =>
+              start(`${url}/${endpoints.join}/${roomCode}`),
+          },
+        }
+      case 'closing':
+        return {
+          status,
+          state,
+        }
+      default:
+        // exhaustiveness guard in case you add new statuses later
+        // (state satisfies never here if union is complete)
+        // const _: never = state
+        throw Error('Illegal state')
+    }
+  }, [close, endpoints.create, endpoints.join, send, start, state, url])
+
+  return <GameCtx.Provider value={value}>{children}</GameCtx.Provider>
+}
+
+export default GameCtxProvider
+// endregion: state
