@@ -1,0 +1,3 @@
+[alias]
+ws-create = "run --bin ws-create"
+ws-join = "run --bin ws-join"
